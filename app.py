@@ -19,11 +19,11 @@ import io
 import zipfile
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from apscheduler.schedulers.background import BackgroundScheduler
 import traceback
 from urllib.parse import unquote
 import os
+from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi.security import HTTPBasic
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -75,7 +75,7 @@ SHARE_GROUPS: Dict[str, ShareGroup] = {}
 settings = Settings()
 
 # Initialize FastAPI app
-app = FastAPI(title="FileShare", description="Secure file sharing service")
+app = FastAPI(title="File Link", description="Secure file sharing service")
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -89,7 +89,7 @@ app.add_middleware(
 )
 
 # Initialize security
-security = HTTPBasic()
+# security = HTTPBasic()
 
 # Utility functions
 def format_size(size: int) -> str:
@@ -201,16 +201,18 @@ async def cleanup_share_group(group_id: str):
                 logger.error(f"Error deleting file {filename}: {e}")
         SHARE_GROUPS.pop(group_id)
 
-def cleanup_expired():
+async def cleanup_expired():
     """Remove expired share groups"""
     current_time = time.time()
-    expired_groups = [
-        group_id for group_id, group in SHARE_GROUPS.items()
-        if group.expiry < current_time
-    ]
+    expired_groups = []
+    
+    for group_id, group in SHARE_GROUPS.items():
+        if group.expiry < current_time:
+            expired_groups.append(group_id)
+            logger.info(f"Cleaning up expired group {group_id}, expired at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(group.expiry))}")
     
     for group_id in expired_groups:
-        asyncio.create_task(cleanup_share_group(group_id))
+        await cleanup_share_group(group_id)
 
 # API Endpoints
 @app.get("/")
@@ -267,12 +269,16 @@ async def upload_files(
         if not 1 <= expiry_seconds <= max_seconds:
             raise HTTPException(
                 status_code=400,
-                detail="Expiry time must be between 1 second and 7 days"
+                detail=f"Expiry time must be between 1 second and {max_seconds} seconds (7 days)"
             )
         
-        # Create share group
+        # Create share group with precise expiry time
         share_group = create_share_group(expiry_seconds)
         share_group.one_time_download = one_time_download
+        
+        # Log creation time and expiry time for debugging
+        logger.info(f"Creating share group with expiry in {expiry_seconds} seconds")
+        logger.info(f"Share group will expire at: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(share_group.expiry))}")
         
         # Save files
         for file in files:
@@ -300,18 +306,25 @@ async def upload_files(
 async def download_page(request: Request, group_id: str):
     """Show download page"""
     if group_id not in SHARE_GROUPS:
+        logger.info(f"Share group {group_id} not found")
         return templates.TemplateResponse("expired.html", {
             "request": request,
             "message": "This share link has expired or does not exist."
         })
     
     share_group = SHARE_GROUPS[group_id]
-    if share_group.expiry < time.time():
+    current_time = time.time()
+    
+    if share_group.expiry < current_time:
+        logger.info(f"Share group {group_id} expired at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(share_group.expiry))}")
         await cleanup_share_group(group_id)
         return templates.TemplateResponse("expired.html", {
             "request": request,
             "message": "This share link has expired."
         })
+    
+    # Add logging for debugging
+    logger.info(f"Serving share group {group_id}, expires at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(share_group.expiry))}")
     
     files = []
     for stored_name, file_data in share_group.files.items():
@@ -382,10 +395,11 @@ async def download_file(group_id: str, filename: str):
             headers=headers
         )
 
-        # Handle one-time downloads - cleanup after response is ready
+        # Handle one-time downloads - cleanup only if it's a one-time download
         if share_group.one_time_download:
             # Schedule cleanup to run after response is sent
             asyncio.create_task(cleanup_share_group(group_id))
+            logger.info(f"One-time download completed for group {group_id}, scheduled for cleanup")
 
         logger.info(f"Serving file: {decoded_filename} as {file_info['original_name']}")
         return response
@@ -443,13 +457,40 @@ def setup_app():
     """Initialize application"""
     verify_storage_path()
     
-    # Setup scheduler
+    # Setup scheduler with less frequent cleanup
     scheduler = BackgroundScheduler()
-    scheduler.add_job(cleanup_expired, 'interval', minutes=FILE_CLEANUP_INTERVAL)
+    # Run cleanup every hour instead of every 30 minutes
+    scheduler.add_job(cleanup_expired, 'interval', hours=1)
     scheduler.start()
+    logger.info("Background scheduler started")
 
 # Initialize app
 setup_app()
+
+@app.get("/download-all/{group_id}")
+async def download_all_files(group_id: str):
+    """Download all files in the share group as a zip file"""
+    logger.info(f"Attempting to download all files for group: {group_id}")
+    
+    if group_id not in SHARE_GROUPS:
+        logger.error(f"Share group {group_id} not found")
+        raise HTTPException(status_code=404, detail="Share group not found")
+
+    share_group = SHARE_GROUPS[group_id]
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for filename, file_data in share_group.files.items():
+            file_path = STORAGE_PATH / filename
+            if file_path.exists():
+                logger.info(f"Adding {filename} to zip")
+                zip_file.write(file_path, arcname=filename)
+            else:
+                logger.warning(f"File {filename} does not exist")
+
+    zip_buffer.seek(0)
+    logger.info("All files zipped successfully")
+    return StreamingResponse(zip_buffer, media_type="application/zip", headers={"Content-Disposition": f"attachment; filename=all_files.zip"})
 
 if __name__ == "__main__":
     import uvicorn
