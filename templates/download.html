@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en" 
+      data-files='{{ files|tojson|safe }}'
+      data-one-time-download="{{ 'true' if one_time_download else 'false' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Download Shared Files</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="/static/styles.css" rel="stylesheet">
+</head>
+<body class="py-12 px-4">
+    <div class="max-w-4xl mx-auto">
+        <div class="card-gradient rounded-2xl p-8 animate-fade-in">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-3xl font-bold mb-2 text-gradient">Shared Files</h1>
+                    <div class="flex items-center gap-2 text-sm text-secondary">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <span>Shared on {{ created_at }}</span>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="inline-flex items-center px-3 py-1 rounded-full bg-accent-primary bg-opacity-10">
+                        <svg class="w-4 h-4 text-accent-primary mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span class="text-sm font-medium text-accent-primary">Expires: {{ expiry_time }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="space-y-4 mb-8">
+                {% for file in files %}
+                <div class="file-card hover:shadow-lg transition-all duration-300 rounded-xl p-4">
+                    <div class="flex items-center gap-4">
+                        <div class="flex-shrink-0 w-12 h-12 bg-accent-primary bg-opacity-10 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-lg font-semibold truncate">{{ file.original_name }}</h3>
+                            <div class="flex items-center gap-3 mt-1 text-sm text-secondary">
+                                <span>{{ file.size }}</span>
+                                {% if file.downloads > 0 %}
+                                <span>•</span>
+                                <span>Downloaded {{ file.downloads }} times</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <a href="{{ file.download_url }}" 
+                           class="download-btn px-4 py-2 rounded-lg bg-accent-primary text-white hover:bg-accent-secondary transition-colors"
+                           download="{{ file.original_name }}">
+                            Download
+                        </a>
+                    </div>
+                    <div class="progress-bar mt-2 hidden">
+                        <div class="progress-bar-fill w-0"></div>
+                    </div>
+                    <div class="status-text mt-1"></div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="border-t border-gray-100 dark:border-gray-700 pt-6">
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-6">
+                        <div class="text-sm text-secondary">
+                            <div class="flex items-center gap-2 mb-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                          d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                                </svg>
+                                <span>Total Size: {{ total_size }}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                <span>Downloads: {{ download_count }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if files %}
+                <button id="downloadAllBtn" 
+                        class="w-full flex items-center justify-center px-6 py-3 bg-success text-white rounded-lg hover:bg-success/90 focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2 transition-all duration-200 font-medium gap-2">
+                    Download All Files
+                </button>
+                {% else %}
+                <div class="text-center text-secondary py-4">
+                    No files available for download
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if one_time_download %}
+    <div class="bg-warning bg-opacity-10 border border-warning border-opacity-20 rounded-lg p-4 mb-6 mt-4 max-w-4xl mx-auto">
+        <div class="flex items-center">
+            <svg class="w-5 h-5 text-warning mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <p class="text-sm text-warning">
+                ⚠️ This is a one-time download link. Once downloaded, the files will no longer be accessible.
+            </p>
+        </div>
+    </div>
+    {% endif %}
+
+    <script src="/static/app.js"></script>
+    <script src="/static/download.js"></script>
+    <script>
+        // Initialize theme and download manager
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            const htmlElement = document.documentElement;
+            const files = JSON.parse(htmlElement.dataset.files);
+            const oneTimeDownload = htmlElement.dataset.oneTimeDownload === 'true';
+            window.downloadManager = new DownloadManager(files, oneTimeDownload);
+        });
+    </script>
+</body>
+</html> 
