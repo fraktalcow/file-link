@@ -37,7 +37,7 @@ To set up the FileLink application locally, follow these steps:
 - **Expiration Settings:** Users can set expiration times for shared links.
 - **One-Time Download Links:** Files can be configured for one-time downloads.
 - **File Compression:** Multiple files can be compressed before upload.
-- **Responsive Design:** The application is styled using Tailwind CSS for a modern look.
+- **Responsive Design:** The application is styled using CSS for a modern look.
 
 ## Basic Implementation
 The FileLink application is structured into several key components:
@@ -57,5 +57,3 @@ The FileLink application is structured into several key components:
 5. **Rate Limiting:**
    - The application uses the `slowapi` library to prevent abuse of the upload endpoint.
 
-## Conclusion
-The FileLink application provides a robust solution for secure file sharing with a user-friendly interface. Each component plays a crucial role in ensuring smooth interactions and efficient file management.
