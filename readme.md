@@ -1,10 +1,10 @@
-# FileShare Web Application
+# FileLink Web Application
 
 ## Project Description
-FileShare is a secure file sharing web application built using FastAPI. It allows users to upload files, share them via unique links, and set expiration times for those links. The application supports various file types and provides features like one-time downloads and file compression, ensuring a user-friendly experience for file management.
+FileLink is a secure file sharing web application built using FastAPI. It allows users to upload files, share them via unique links, and set expiration times for those links. The application supports various file types and provides features like one-time downloads and file compression, ensuring a user-friendly experience for file management.
 
 ## Setup Instructions
-To set up the FileShare application locally, follow these steps:
+To set up the FileLink application locally, follow these steps:
 
 1. **Clone the Repository:**
    ```bash
@@ -40,7 +40,7 @@ To set up the FileShare application locally, follow these steps:
 - **Responsive Design:** The application is styled using Tailwind CSS for a modern look.
 
 ## Basic Implementation
-The FileShare application is structured into several key components:
+The FileLink application is structured into several key components:
 
 1. **Backend (FastAPI):**
    - The main application file (`app.py`) initializes the FastAPI app and defines API endpoints for file uploads, downloads, and share group management.
@@ -58,4 +58,4 @@ The FileShare application is structured into several key components:
    - The application uses the `slowapi` library to prevent abuse of the upload endpoint.
 
 ## Conclusion
-The FileShare application provides a robust solution for secure file sharing with a user-friendly interface. Each component plays a crucial role in ensuring smooth interactions and efficient file management.
+The FileLink application provides a robust solution for secure file sharing with a user-friendly interface. Each component plays a crucial role in ensuring smooth interactions and efficient file management.
