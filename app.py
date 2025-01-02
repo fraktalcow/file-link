@@ -1,12 +1,11 @@
-from fastapi import FastAPI, HTTPException, Request, File, UploadFile, Form, Header
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from cryptography.fernet import Fernet
 from datetime import datetime
 import logging
 import asyncio
@@ -15,11 +14,8 @@ import time
 import mimetypes
 import aiofiles
 from pathlib import Path
-import io
-import zipfile
-from typing import List, Dict, Optional
+from typing import List, Dict
 from pydantic import BaseModel, Field
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from apscheduler.schedulers.background import BackgroundScheduler
 import traceback
 from urllib.parse import unquote
@@ -59,7 +55,6 @@ class ShareGroup(BaseModel):
     total_size: int = Field(default=0, description="Total size of all files")
     download_count: int = Field(default=0, description="Number of downloads")
     one_time_download: bool = Field(default=False, description="Whether files can only be downloaded once")
-    encryption_key: bytes = Field(default_factory=lambda: Fernet.generate_key(), description="Encryption key for files")
     
     class Config:
         arbitrary_types_allowed = True
@@ -130,28 +125,8 @@ def create_share_group(expiry_seconds: int) -> ShareGroup:
     logger.info(f"Share group created successfully: {group_id}")
     return share_group
 
-class EncryptedFileHandler:
-    def __init__(self):
-        self.cipher_suites = {}
-
-    def get_cipher_suite(self, share_group: ShareGroup) -> Fernet:
-        if share_group.group_id not in self.cipher_suites:
-            self.cipher_suites[share_group.group_id] = Fernet(share_group.encryption_key)
-        return self.cipher_suites[share_group.group_id]
-
-    async def encrypt_file(self, file_content: bytes, share_group: ShareGroup) -> bytes:
-        cipher_suite = self.get_cipher_suite(share_group)
-        return cipher_suite.encrypt(file_content)
-
-    async def decrypt_file(self, encrypted_content: bytes, share_group: ShareGroup) -> bytes:
-        cipher_suite = self.get_cipher_suite(share_group)
-        return cipher_suite.decrypt(encrypted_content)
-
-# Initialize encryption handler
-encrypted_file_handler = EncryptedFileHandler()
-
-async def save_file(file: UploadFile, share_group: ShareGroup) -> dict:
-    """Save uploaded file with chunked reading"""
+async def save_file(file: UploadFile, relative_path: str, share_group: ShareGroup) -> dict:
+    """Save uploaded file with chunked reading, maintaining directory structure"""
     try:
         ext = Path(file.filename).suffix.lower()
         if ext not in ALLOWED_EXTENSIONS:
@@ -160,10 +135,29 @@ async def save_file(file: UploadFile, share_group: ShareGroup) -> dict:
                 detail=f"File type not allowed. Supported types: {', '.join(ALLOWED_EXTENSIONS)}"
             )
         
-        # Create a safe filename
-        safe_stem = "".join(c for c in Path(file.filename).stem if c.isalnum() or c in '_-')
+        # Create a safe filename while maintaining directory structure
+        path_parts = relative_path.split('/')
+        safe_filename = path_parts[-1]
+        safe_path_parts = []
+        
+        # Process directory structure
+        for part in path_parts[:-1]:
+            safe_part = "".join(c for c in part if c.isalnum() or c in '_-')
+            safe_path_parts.append(safe_part)
+        
+        # Add unique identifier to filename
+        safe_stem = "".join(c for c in Path(safe_filename).stem if c.isalnum() or c in '_-')
         safe_filename = f"{safe_stem}_{secrets.token_hex(8)}{ext}"
-        file_path = STORAGE_PATH / safe_filename
+        
+        # Combine path parts
+        if safe_path_parts:
+            dir_path = STORAGE_PATH.joinpath(*safe_path_parts)
+            dir_path.mkdir(parents=True, exist_ok=True)
+            file_path = dir_path / safe_filename
+            stored_path = '/'.join(safe_path_parts) + '/' + safe_filename
+        else:
+            file_path = STORAGE_PATH / safe_filename
+            stored_path = safe_filename
         
         # Read and write file in chunks
         file_size = 0
@@ -196,11 +190,11 @@ async def save_file(file: UploadFile, share_group: ShareGroup) -> dict:
         # Detect MIME type
         mime_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
         
-        logger.info(f"File saved: {safe_filename} (original: {file.filename})")
+        logger.info(f"File saved: {stored_path} (original: {relative_path})")
         
         return {
-            'original_name': file.filename,
-            'stored_name': safe_filename,
+            'original_name': relative_path,
+            'stored_name': stored_path,
             'mime_type': mime_type,
             'size': file_size,
             'downloads': 0,
@@ -221,16 +215,30 @@ async def cleanup_share_group(group_id: str):
     if group_id in SHARE_GROUPS:
         share_group = SHARE_GROUPS[group_id]
         logger.info(f"Found share group {group_id} with {len(share_group.files)} files")
+        
+        # Get all unique directories to clean up
+        directories = set()
         for filename in share_group.files:
             file_path = STORAGE_PATH / filename
             try:
                 if file_path.exists():
                     await aiofiles.os.remove(file_path)
+                    directories.add(file_path.parent)
                     logger.info(f"Deleted file: {file_path}")
                 else:
                     logger.warning(f"File not found during cleanup: {file_path}")
             except Exception as e:
                 logger.error(f"Error deleting file {filename}: {e}")
+        
+        # Clean up empty directories
+        for directory in sorted(directories, reverse=True):
+            try:
+                if directory != STORAGE_PATH and directory.exists() and not any(directory.iterdir()):
+                    directory.rmdir()
+                    logger.info(f"Removed empty directory: {directory}")
+            except Exception as e:
+                logger.error(f"Error removing directory {directory}: {e}")
+        
         SHARE_GROUPS.pop(group_id)
         logger.info(f"Share group {group_id} removed. Remaining groups: {list(SHARE_GROUPS.keys())}")
     else:
@@ -297,10 +305,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Apply rate limiting to critical endpoints
 @app.post("/upload")
-@limiter.limit("10/minute")
+@limiter.limit("10/minute")  # Limit to 10 uploads per minute per IP
 async def upload_files(
     request: Request,
     files: List[UploadFile] = File(...),
+    paths: List[str] = Form(...),
     expiry_seconds: int = Form(DEFAULT_EXPIRY_HOURS * 3600),
     one_time_download: bool = Form(False)
 ):
@@ -317,43 +326,30 @@ async def upload_files(
                 detail="Expiry time must be between 1 second and 7 days"
             )
         
+        if len(files) != len(paths):
+            raise HTTPException(
+                status_code=400,
+                detail="Number of files and paths must match"
+            )
+        
         # Create share group
         share_group = create_share_group(expiry_seconds)
         share_group.one_time_download = one_time_download
         logger.info(f"Created new share group: {share_group.group_id}")
         
-        total_size = 0
         file_errors = []
         
         # Process files with validation
-        for file in files:
+        for file, path in zip(files, paths):
             try:
-                logger.info(f"Processing file: {file.filename}")
-                # Validate file size before reading
-                file_size = 0
-                chunk_size = 8192  # Read in 8KB chunks to check size
-                
-                while chunk := await file.read(chunk_size):
-                    file_size += len(chunk)
-                    if file_size > MAX_FILE_SIZE:
-                        raise ValueError(f"File {file.filename} exceeds maximum size of {format_size(MAX_FILE_SIZE)}")
-                
-                # Reset file position for actual save
-                await file.seek(0)
-                
-                # Check total size
-                if total_size + file_size > MAX_TOTAL_SIZE:
-                    raise ValueError(f"Total size would exceed maximum of {format_size(MAX_TOTAL_SIZE)}")
-                
-                # Save file
-                file_metadata = await save_file(file, share_group)
+                logger.info(f"Processing file: {path}")
+                file_metadata = await save_file(file, path, share_group)
                 share_group.files[file_metadata['stored_name']] = file_metadata
-                total_size += file_size
-                logger.info(f"Successfully saved file: {file.filename} ({format_size(file_size)})")
+                logger.info(f"Successfully saved file: {path} ({format_size(file_metadata['size'])})")
                 
             except Exception as e:
-                logger.error(f"Error processing file {file.filename}: {str(e)}")
-                file_errors.append({"filename": file.filename, "error": str(e)})
+                logger.error(f"Error processing file {path}: {str(e)}")
+                file_errors.append({"filename": path, "error": str(e)})
                 continue
         
         if not share_group.files:
@@ -424,7 +420,8 @@ async def download_page(request: Request, group_id: str):
     })
 
 @app.get("/download/{group_id}/file/{filename}")
-async def download_file(group_id: str, filename: str):
+@limiter.limit("10/minute")  # Limit to 30 downloads per minute per IP
+async def download_file(request: Request, group_id: str, filename: str):
     """Handle file download with proper filename handling"""
     try:
         # Get share group

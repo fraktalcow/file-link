@@ -1,4 +1,4 @@
-# FileLink Web Application
+# File-Link Web Application
 
 ## Project Description
 FileLink is a secure file sharing web application built using FastAPI. It allows users to upload files, share them via unique links, and set expiration times for those links. The application supports various file types and provides features like one-time downloads and file compression, ensuring a user-friendly experience for file management.

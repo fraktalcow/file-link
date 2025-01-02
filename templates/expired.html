@@ -9,23 +9,47 @@
     <link href="/static/styles.css" rel="stylesheet">
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
-    <div class="max-w-md w-full card-gradient rounded-xl p-8 text-center animate-fade-in">
-        <div class="mb-6">
-            <svg class="w-16 h-16 mx-auto text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-            </svg>
+    <div class="max-w-md w-full">
+        <div class="text-center mb-6 animate-fade-in">
+            <h1 class="text-4xl font-bold mb-3 text-gradient">
+                Link Expired
+            </h1>
+            <p class="text-secondary text-lg max-w-lg mx-auto">
+                Oops! This sharing link is no longer available.
+            </p>
         </div>
-        <h1 class="text-2xl font-bold mb-3 text-gradient">Link Expired</h1>
-        <p class="text-secondary text-lg mb-6">{{ message }}</p>
-        <a href="/" 
-           class="inline-flex items-center px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-secondary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 transition-all duration-200">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                      d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+
+        <div class="card-gradient rounded-2xl p-8 text-center animate-fade-in">
+            <div class="mb-6">
+                <div class="relative w-16 h-16 mx-auto">
+                    <svg class="w-16 h-16 mx-auto text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <div class="absolute inset-0 bg-error opacity-10 rounded-full animate-pulse"></div>
+                </div>
+            </div>
+            <p class="text-secondary text-lg mb-8">{{ message }}</p>
+            <a href="/" 
+               class="download-btn inline-flex items-center justify-center w-full sm:w-auto">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                Back to Home
+            </a>
+        </div>
+    </div>
+
+    <div class="fixed bottom-4 right-4">
+        <button id="theme-toggle" class="text-secondary focus:outline-none" aria-label="Toggle Dark Mode">
+            <svg id="theme-toggle-dark-icon" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 0010.586 10.586z" />
             </svg>
-            Back to Home
-        </a>
+            <svg id="theme-toggle-light-icon" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 2a1 1 0 011 1v2a1 1 0 11-2 0V3a1 1 0 011-1zm4.22 2.03a1 1 0 011.415 1.415l-1.414 1.414a1 1 0 01-1.415-1.415l1.414-1.414zM18 9a1 1 0 110 2h-2a1 1 0 110-2h2zM15.657 14.243a1 1 0 011.415 1.415l-1.414 1.414a1 1 0 01-1.415-1.415l1.414-1.414zM10 16a1 1 0 011 1v2a1 1 0 11-2 0v-2a1 1 0 011-1zm-4.22-1.757a1 1 0 011.415 0l1.414 1.414a1 1 0 11-1.415 1.415L5.78 14.657a1 1 0 011.415-1.414zM2 9a1 1 0 110 2H0a1 1 0 110-2h2zm1.343-4.657a1 1 0 010 1.414L1.93 8.243a1 1 0 11-1.415-1.415l1.414-1.414a1 1 0 011.415 0z" />
+            </svg>
+        </button>
     </div>
 
     <script src="/static/app.js"></script>

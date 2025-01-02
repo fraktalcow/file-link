@@ -23,7 +23,10 @@
             <form id="uploadForm" class="space-y-8" aria-labelledby="uploadFormLabel">
                 <h2 id="uploadFormLabel" class="sr-only">File Upload Form</h2>
                 <div class="drop-zone rounded-xl p-8 text-center relative cursor-pointer hover-lift">
+                    <!-- Regular file input -->
                     <input type="file" id="fileInput" multiple class="hidden" accept="{{ allowed_extensions }}">
+                    <!-- Directory input -->
+                    <input type="file" id="directoryInput" class="hidden" webkitdirectory directory>
                     <label for="fileInput" class="cursor-pointer block">
                         <div class="text-secondary">
                             <div class="mb-4 relative">
@@ -33,7 +36,17 @@
                                 </svg>
                                 <div class="absolute inset-0 bg-accent-primary opacity-20 rounded-full animate-pulse"></div>
                             </div>
-                            <p class="text-lg font-medium mb-2">Drop files here or click to select</p>
+                            <p class="text-lg font-medium mb-2">Drop here</p>
+                            <div class="flex justify-center gap-4 mb-4">
+                                <button type="button" onclick="document.getElementById('fileInput').click()" 
+                                        class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                                    Select Files
+                                </button>
+                                <button type="button" onclick="document.getElementById('directoryInput').click()"
+                                        class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                                    Select Directory
+                                </button>
+                            </div>
                             <div class="flex flex-col gap-1 text-sm text-secondary">
                                 <p>Maximum file size: {{ max_file_size }}</p>
                                 <p>Total upload limit: {{ max_total_size }}</p>
@@ -60,7 +73,7 @@
                             </div>
                             <div>
                                 <label class="block text-xs text-secondary mb-1">Minutes</label>
-                                <input type="number" name="expiry_minutes" min="0" max="59" value="10"
+                                <input type="number" name="expiry_minutes" min="0" max="59" value="2"
                                        class="w-full rounded-lg border-gray-200 shadow-sm focus:border-accent-primary focus:ring focus:ring-accent-primary focus:ring-opacity-50">
                             </div>
                             <div>

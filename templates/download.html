@@ -13,10 +13,18 @@
 </head>
 <body class="py-12 px-4">
     <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-10 animate-fade-in">
+            <h1 class="text-4xl font-bold mb-3 text-gradient">
+                Shared Files
+            </h1>
+            <p class="text-secondary text-lg max-w-lg mx-auto">
+                Download your shared files securely.
+            </p>
+        </div>
+
         <div class="card-gradient rounded-2xl p-8 animate-fade-in">
             <div class="flex items-center justify-between mb-8">
                 <div>
-                    <h1 class="text-3xl font-bold mb-2 text-gradient">Shared Files</h1>
                     <div class="flex items-center gap-2 text-sm text-secondary">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -57,22 +65,21 @@
                             </div>
                         </div>
                         <a href="{{ file.download_url }}" 
-                           class="download-btn px-4 py-2 rounded-lg bg-accent-primary text-white hover:bg-accent-secondary transition-colors"
+                           class="download-btn"
                            download="{{ file.original_name }}">
-                            Download
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            <span>Download</span>
                         </a>
                     </div>
-                    <div class="progress-bar mt-2 hidden">
-                        <div class="progress-bar-fill w-0"></div>
-                    </div>
-                    <div class="status-text mt-1"></div>
                 </div>
                 {% endfor %}
             </div>
 
-            <div class="border-t border-gray-100 dark:border-gray-700 pt-6">
+            <div class="border-t border-gray-100 pt-6">
                 <div class="flex items-center justify-between">
-                    <!-- Stats section -->
                     <div class="text-sm text-secondary">
                         <div class="flex items-center gap-2 mb-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -90,11 +97,14 @@
                         </div>
                     </div>
 
-                    <!-- Add a new area for downloading all files -->
                     <div class="flex items-end justify-end">
                         <button id="downloadAllBtn"
-                                class="download-btn px-4 py-2 rounded-lg bg-accent-primary text-white hover:bg-accent-secondary transition-colors border-none"
+                                class="download-btn"
                                 data-group-id="{{ request.path.split('/')[-1] }}">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
                             <span>Download All Files</span>
                         </button>
                     </div>
@@ -104,7 +114,7 @@
     </div>
 
     {% if one_time_download %}
-    <div class="bg-warning bg-opacity-10 border border-warning border-opacity-20 rounded-lg p-4 mb-6 mt-4 max-w-4xl mx-auto">
+    <div class="card-gradient rounded-xl p-4 mb-6 mt-4 max-w-4xl mx-auto border-2 border-warning border-opacity-20">
         <div class="flex items-center">
             <svg class="w-5 h-5 text-warning mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -122,40 +132,14 @@
     <script src="/static/download.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            try {
-                // Get the download button first
-                const downloadBtn = document.getElementById('downloadAllBtn');
-                if (!downloadBtn) {
-                    console.error('Download button not found in the page');
-                    return;
-                }
-
-                // Get the data from the HTML element
-                const htmlElement = document.documentElement;
-                const files = JSON.parse(htmlElement.dataset.files || '[]');
-                const groupId = downloadBtn.dataset.groupId;
-                const oneTimeDownload = htmlElement.dataset.oneTimeDownload === 'true';
-                
-                // Debug logging
-                console.log('Button found:', downloadBtn);
-                console.log('Button group ID:', groupId);
-                console.log('Files data:', files);
-                console.log('One-time download:', oneTimeDownload);
-                
-                if (!window.DownloadManager) {
-                    console.error('DownloadManager class not found. Make sure download.js is loaded correctly.');
-                    return;
-                }
-                
-                if (!groupId) {
-                    console.error('Group ID not found in page data.');
-                    return;
-                }
-                
+            const downloadBtn = document.getElementById('downloadAllBtn');
+            const htmlElement = document.documentElement;
+            const files = JSON.parse(htmlElement.dataset.files || '[]');
+            const groupId = downloadBtn.dataset.groupId;
+            const oneTimeDownload = htmlElement.dataset.oneTimeDownload === 'true';
+            
+            if (downloadBtn && files.length > 0) {
                 window.downloadManager = new DownloadManager(files, oneTimeDownload, groupId);
-                console.log('Download manager initialized successfully');
-            } catch (error) {
-                console.error('Error initializing download manager:', error);
             }
         });
     </script>

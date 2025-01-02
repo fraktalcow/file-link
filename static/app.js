@@ -61,6 +61,7 @@ class FileUploadManager {
         this.files = new Map();
         this.uploadForm = document.getElementById('uploadForm');
         this.fileInput = document.getElementById('fileInput');
+        this.directoryInput = document.getElementById('directoryInput');
         this.fileList = document.getElementById('fileList');
         this.dropZone = document.querySelector('.drop-zone');
         this.dragOverlay = document.getElementById('dragOverlay');
@@ -85,6 +86,9 @@ class FileUploadManager {
 
         // File input change
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+        
+        // Directory input change
+        this.directoryInput.addEventListener('change', (e) => this.handleFileSelect(e));
 
         // Drag and drop events
         this.dropZone.addEventListener('dragenter', () => this.handleDragEnter());
@@ -108,32 +112,89 @@ class FileUploadManager {
     }
 
     handleDragLeave(e) {
-        // Only hide overlay if we're leaving the drop zone (not entering a child element)
         if (!e.relatedTarget || !this.dropZone.contains(e.relatedTarget)) {
             this.dragOverlay.classList.add('hidden');
             this.dropZone.classList.remove('drag-active');
         }
     }
 
-    handleDrop(e) {
+    async handleDrop(e) {
         this.dragOverlay.classList.add('hidden');
         this.dropZone.classList.remove('drag-active');
         
-        const droppedFiles = Array.from(e.dataTransfer.files);
-        this.processFiles(droppedFiles);
+        const items = Array.from(e.dataTransfer.items);
+        
+        // Handle dropped items (files or directories)
+        for (const item of items) {
+            if (item.kind === 'file') {
+                const entry = item.webkitGetAsEntry();
+                if (entry) {
+                    if (entry.isDirectory) {
+                        await this.processDirectory(entry);
+                    } else {
+                        const file = item.getAsFile();
+                        this.processFiles([file]);
+                    }
+                }
+            }
+        }
+    }
+
+    async processDirectory(dirEntry) {
+        const files = await this.getAllFilesFromDirectory(dirEntry);
+        this.processFiles(files);
+    }
+
+    getAllFilesFromDirectory(dirEntry) {
+        const files = [];
+        
+        async function traverseDirectory(entry, path = '') {
+            if (entry.isFile) {
+                return new Promise((resolve) => {
+                    entry.file((file) => {
+                        // Add the full path to the file object
+                        file.webkitRelativePath = path + file.name;
+                        files.push(file);
+                        resolve();
+                    });
+                });
+            } else if (entry.isDirectory) {
+                const dirReader = entry.createReader();
+                const entries = await new Promise((resolve) => {
+                    const results = [];
+                    function readEntries() {
+                        dirReader.readEntries((entries) => {
+                            if (entries.length === 0) {
+                                resolve(results);
+                            } else {
+                                results.push(...entries);
+                                readEntries();
+                            }
+                        });
+                    }
+                    readEntries();
+                });
+                
+                await Promise.all(entries.map((entry) => 
+                    traverseDirectory(entry, path + entry.name + '/')
+                ));
+            }
+        }
+        
+        return traverseDirectory(dirEntry).then(() => files);
     }
 
     handleFileSelect(event) {
         const selectedFiles = Array.from(event.target.files);
         this.processFiles(selectedFiles);
         // Reset file input to allow selecting the same file again
-        this.fileInput.value = '';
+        event.target.value = '';
     }
 
     processFiles(newFiles) {
         // Calculate current total size
         let currentTotalSize = Array.from(this.files.values())
-            .reduce((total, file) => total + file.size, 0);
+            .reduce((total, {file}) => total + file.size, 0);
 
         newFiles.forEach(file => {
             // Check file size
@@ -155,10 +216,16 @@ class FileUploadManager {
                 return;
             }
 
+            // Get relative path for directory structure
+            const relativePath = file.webkitRelativePath || file.name;
+            
             // Add file if it passes all checks
             const fileId = crypto.randomUUID();
-            this.files.set(fileId, file);
-            this.addFilePreview(fileId, file);
+            this.files.set(fileId, {
+                file: file,
+                relativePath: relativePath
+            });
+            this.addFilePreview(fileId, file, relativePath);
             currentTotalSize += file.size;
         });
 
@@ -197,11 +264,15 @@ class FileUploadManager {
         return `${size.toFixed(1)} ${units[unitIndex]}`;
     }
 
-    addFilePreview(fileId, file) {
+    addFilePreview(fileId, file, relativePath) {
         const fileSize = this.formatSize(file.size);
         const fileElement = document.createElement('div');
         fileElement.className = 'file-card rounded-xl p-4 border border-gray-100';
         fileElement.dataset.fileId = fileId;
+        
+        // Get directory path if it exists
+        const dirPath = relativePath.split('/').slice(0, -1).join('/');
+        const dirDisplay = dirPath ? `<p class="text-xs text-blue-500">📁 ${dirPath}/</p>` : '';
         
         fileElement.innerHTML = `
             <div class="flex items-center gap-4">
@@ -212,8 +283,9 @@ class FileUploadManager {
                     </svg>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 truncate">${file.name}</h3>
-                    <p class="text-sm text-gray-500">${fileSize}</p>
+                    <h3 class="text-lg font-semibold text-[#9aa5ce] truncate">${file.name}</h3>
+                    ${dirDisplay}
+                    <p class="text-sm text-[#9aa5ce]">${fileSize}</p>
                 </div>
                 <button type="button" onclick="fileUploadManager.removeFile('${fileId}')"
                         class="text-gray-400 hover:text-red-500 transition-colors">
@@ -244,8 +316,9 @@ class FileUploadManager {
         event.preventDefault();
         
         const formData = new FormData();
-        this.files.forEach(file => {
+        this.files.forEach(({file, relativePath}, fileId) => {
             formData.append('files', file);
+            formData.append('paths', relativePath);
         });
         
         // Add expiry time
