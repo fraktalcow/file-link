@@ -379,11 +379,10 @@ class FileUploadManager {
         linkElement.className = 'bg-bg-tertiary-light dark:bg-bg-tertiary-dark rounded-lg p-4';
         linkElement.innerHTML = `
             <div class="flex items-center justify-between gap-4">
-                <input type="text" value="${shareUrl}" id="shareUrlInput" readonly
+                <input type="text" value="${shareUrl}" readonly
                        class="flex-1 bg-transparent border-0 focus:ring-0 text-sm text-text-primary-light dark:text-text-primary-dark">
-                <button onclick="document.getElementById('shareUrlInput').select(); document.execCommand('copy'); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy Link', 2000)"
-                        style="background-color: #bb9af7"
-                        class="download-btn w-full sm:w-auto px-6 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 transition-all duration-200 font-medium">
+                <button onclick="navigator.clipboard.writeText('${shareUrl}')"
+                        class="px-3 py-1 bg-accent-primary-light dark:bg-accent-primary-dark text-text-primary-light dark:text-text-primary-dark rounded hover:bg-accent-secondary-light dark:hover:bg-accent-secondary-dark focus:outline-none focus:ring-2 focus:ring-accent-primary-light dark:focus:ring-accent-primary-dark focus:ring-offset-2 transition-colors text-sm">
                     Copy Link
                 </button>
             </div>

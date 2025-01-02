@@ -81,17 +81,9 @@ templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Add CORS middleware
-ALLOWED_IPS = [
-    "35.160.120.126",
-    "44.233.151.27",
-    "34.211.200.85",
-    "127.0.0.1",  # Allow localhost for development
-    "localhost"    # Allow localhost for development
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[f"http://{ip}" for ip in ALLOWED_IPS] + [f"https://{ip}" for ip in ALLOWED_IPS],
+    allow_origins=["*"],  # In production, replace with actual domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -102,7 +94,7 @@ security = HTTPBasic()
 
 # Log server startup info
 logger.info("Server starting up...")
-logger.info("CORS configured for specific IPs: %s", ALLOWED_IPS)
+logger.info("CORS configured to allow all origins")
 logger.info("Allowed file extensions: %s", ALLOWED_EXTENSIONS)
 
 # Utility functions
@@ -520,6 +512,5 @@ setup_app()
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 10000))  # Default to Render's default port 10000
-    logger.info(f"Starting server on port {port}")
-    uvicorn.run("app:app", host="0.0.0.0", port=port, log_level="info")
+    logger.info("Starting server on 0.0.0.0:8000 - Available on your local network")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
