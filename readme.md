@@ -1,59 +1,52 @@
-# File-Link Web Application
+# FileLink - Simple File Sharing
 
-## Project Description
-FileLink is a secure file sharing web application built using FastAPI. It allows users to upload files, share them via unique links, and set expiration times for those links. The application supports various file types and provides features like one-time downloads and file compression, ensuring a user-friendly experience for file management.
+A web application that lets you share files securely with customizable expiration times.
 
-## Setup Instructions
-To set up the FileLink application locally, follow these steps:
+## Features
+- Upload and share files with unique links
+- Set custom expiration times for shared links
+- One-time download option
+- Multiple file upload support
+- Drag and drop interface
+- Responsive design
 
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/fraktalcow/file-link.git
-   cd file-link
-   ```
+## Screenshots
+![Home Page](assets/home.png)
+*Home page with file upload interface*
 
-2. **Create a Virtual Environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   ```
+![Download Page](assets/download.png)
+*Download page showing shared files*
 
-3. **Install Dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Setup
 
-4. **Run the Application:**
-   ```bash
-   uvicorn app:app --reload
-   ```
+1. Clone the repository:
+```bash
+git clone https://github.com/fraktalcow/file-link.git
+cd file-link
+```
 
-5. **Access the Application:**
-   Open your web browser and navigate to `http://127.0.0.1:8000`.
+2. Create and activate virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+```
 
-## Features Overview
-- **File Uploads:** Users can upload files with a simple drag-and-drop interface.
-- **Share Links:** Each uploaded file can be shared via a unique link.
-- **Expiration Settings:** Users can set expiration times for shared links.
-- **One-Time Download Links:** Files can be configured for one-time downloads.
-- **File Compression:** Multiple files can be compressed before upload.
-- **Responsive Design:** The application is styled using CSS for a modern look.
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-## Basic Implementation
-The FileLink application is structured into several key components:
+4. Run the application:
+```bash
+uvicorn app:app --reload
+```
 
-1. **Backend (FastAPI):**
-   - The main application file (`app.py`) initializes the FastAPI app and defines API endpoints for file uploads, downloads, and share group management.
+5. Open `http://127.0.0.1:8000` in your browser.
 
-2. **Frontend:**
-   - The user interface is built using HTML, CSS, and JavaScript. The main page (`templates/index.html`) provides a form for file uploads, while `static/app.js` manages front-end interactions.
+## Technical Details
 
-3. **File Management:**
-   - Uploaded files are stored in a local directory (`./uploads`), and share groups are managed in-memory (can be extended to use a database).
-
-4. **Security Features:**
-   - Basic authentication and file encryption are implemented to ensure secure file handling.
-
-5. **Rate Limiting:**
-   - The application uses the `slowapi` library to prevent abuse of the upload endpoint.
+- Backend: FastAPI
+- Frontend: HTML, JavaScript, TailwindCSS
+- File Storage: Local storage with automatic cleanup
+- Security: Rate limiting and file validation
 
