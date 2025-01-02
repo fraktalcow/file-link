@@ -511,6 +511,5 @@ def setup_app():
 setup_app()
 
 if __name__ == "__main__":
-    import uvicorn
-    logger.info("Starting server on 0.0.0.0:8000 - Available on your local network")
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    port = int(os.environ.get("PORT", 8000))  # Default to 8000 if PORT is not set
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
