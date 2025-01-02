@@ -81,9 +81,17 @@ templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Add CORS middleware
+ALLOWED_IPS = [
+    "35.160.120.126",
+    "44.233.151.27",
+    "34.211.200.85",
+    "127.0.0.1",  # Allow localhost for development
+    "localhost"    # Allow localhost for development
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with actual domains
+    allow_origins=[f"http://{ip}" for ip in ALLOWED_IPS] + [f"https://{ip}" for ip in ALLOWED_IPS],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -94,7 +102,7 @@ security = HTTPBasic()
 
 # Log server startup info
 logger.info("Server starting up...")
-logger.info("CORS configured to allow all origins")
+logger.info("CORS configured for specific IPs: %s", ALLOWED_IPS)
 logger.info("Allowed file extensions: %s", ALLOWED_EXTENSIONS)
 
 # Utility functions
