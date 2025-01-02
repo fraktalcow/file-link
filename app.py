@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -90,6 +91,11 @@ app.add_middleware(
 
 # Initialize security
 security = HTTPBasic()
+
+# Log server startup info
+logger.info("Server starting up...")
+logger.info("CORS configured to allow all origins")
+logger.info("Allowed file extensions: %s", ALLOWED_EXTENSIONS)
 
 # Utility functions
 def format_size(size: int) -> str:
@@ -506,4 +512,5 @@ setup_app()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    logger.info("Starting server on 0.0.0.0:8000 - Available on your local network")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

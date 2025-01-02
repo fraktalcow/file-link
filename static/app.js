@@ -219,8 +219,10 @@ class FileUploadManager {
             // Get relative path for directory structure
             const relativePath = file.webkitRelativePath || file.name;
             
+            // Generate a unique ID using timestamp and random string
+            const fileId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+            
             // Add file if it passes all checks
-            const fileId = crypto.randomUUID();
             this.files.set(fileId, {
                 file: file,
                 relativePath: relativePath
@@ -374,21 +376,21 @@ class FileUploadManager {
         
         const shareUrl = `${window.location.origin}${result.share_url}`;
         const linkElement = document.createElement('div');
-        linkElement.className = 'bg-gray-50 dark:bg-gray-700 rounded-lg p-4';
+        linkElement.className = 'bg-bg-tertiary-light dark:bg-bg-tertiary-dark rounded-lg p-4';
         linkElement.innerHTML = `
             <div class="flex items-center justify-between gap-4">
                 <input type="text" value="${shareUrl}" readonly
-                       class="flex-1 bg-transparent border-0 focus:ring-0 text-sm text-gray-600 dark:text-gray-300">
+                       class="flex-1 bg-transparent border-0 focus:ring-0 text-sm text-text-primary-light dark:text-text-primary-dark">
                 <button onclick="navigator.clipboard.writeText('${shareUrl}')"
-                        class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 transition-colors text-sm">
+                        class="px-3 py-1 bg-accent-primary-light dark:bg-accent-primary-dark text-text-primary-light dark:text-text-primary-dark rounded hover:bg-accent-secondary-light dark:hover:bg-accent-secondary-dark focus:outline-none focus:ring-2 focus:ring-accent-primary-light dark:focus:ring-accent-primary-dark focus:ring-offset-2 transition-colors text-sm">
                     Copy Link
                 </button>
             </div>
-            <div class="mt-2 text-sm text-gray-500">
+            <div class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark">
                 <p>Expires: ${result.expiry_time}</p>
                 <p>Files: ${result.file_count}</p>
                 <p>Total size: ${result.total_size}</p>
-                ${result.one_time_download ? '<p class="text-orange-500">⚠️ One-time download link</p>' : ''}
+                ${result.one_time_download ? '<p class="text-warning-light dark:text-warning-dark">⚠️ One-time download link</p>' : ''}
             </div>
         `;
         
