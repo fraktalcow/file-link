@@ -19,11 +19,11 @@ import io
 import zipfile
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from apscheduler.schedulers.background import BackgroundScheduler
 import traceback
 from urllib.parse import unquote
 import os
-from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi.security import HTTPBasic
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize constants
 STORAGE_PATH = Path("./uploads")
-STORAGE_PATH.mkdir(exist_ok=True)  # Ensure uploads directory exists
+STORAGE_PATH.mkdir(exist_ok=True)  # Ensure uploads directory exists    
 DEFAULT_EXPIRY_HOURS = 24
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
 MAX_TOTAL_SIZE = 1024 * 1024 * 1024  # 1GB
@@ -75,7 +75,12 @@ SHARE_GROUPS: Dict[str, ShareGroup] = {}
 settings = Settings()
 
 # Initialize FastAPI app
-app = FastAPI(title="File Link", description="Secure file sharing service")
+app = FastAPI(
+    title="FileShare",
+    description="Secure file sharing service",
+    # Increase maximum upload size
+    max_upload_size=MAX_TOTAL_SIZE
+)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -89,7 +94,7 @@ app.add_middleware(
 )
 
 # Initialize security
-# security = HTTPBasic()
+security = HTTPBasic()
 
 # Utility functions
 def format_size(size: int) -> str:
@@ -129,7 +134,7 @@ class EncryptedFileHandler:
 encrypted_file_handler = EncryptedFileHandler()
 
 async def save_file(file: UploadFile, share_group: ShareGroup) -> dict:
-    """Save uploaded file with improved filename handling"""
+    """Save uploaded file with chunked reading"""
     try:
         ext = Path(file.filename).suffix.lower()
         if ext not in ALLOWED_EXTENSIONS:
@@ -138,30 +143,35 @@ async def save_file(file: UploadFile, share_group: ShareGroup) -> dict:
                 detail=f"File type not allowed. Supported types: {', '.join(ALLOWED_EXTENSIONS)}"
             )
         
-        # Create a safe filename by removing special characters and spaces
+        # Create a safe filename
         safe_stem = "".join(c for c in Path(file.filename).stem if c.isalnum() or c in '_-')
         safe_filename = f"{safe_stem}_{secrets.token_hex(8)}{ext}"
         file_path = STORAGE_PATH / safe_filename
         
-        contents = await file.read()
-        file_size = len(contents)
+        # Read and write file in chunks
+        file_size = 0
+        chunk_size = 1024 * 1024  # 1MB chunks
         
-        # Validate file size
-        if file_size > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Maximum size: {format_size(MAX_FILE_SIZE)}"
-            )
+        async with aiofiles.open(file_path, 'wb') as f:
+            while chunk := await file.read(chunk_size):
+                await f.write(chunk)
+                file_size += len(chunk)
+                
+                # Check size limits
+                if file_size > MAX_FILE_SIZE:
+                    await f.close()
+                    await aiofiles.os.remove(file_path)
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File too large. Maximum size: {format_size(MAX_FILE_SIZE)}"
+                    )
         
         if share_group.total_size + file_size > MAX_TOTAL_SIZE:
+            await aiofiles.os.remove(file_path)
             raise HTTPException(
                 status_code=400,
                 detail=f"Total size exceeds limit of {format_size(MAX_TOTAL_SIZE)}"
             )
-        
-        # Save file
-        async with aiofiles.open(file_path, 'wb') as f:
-            await f.write(contents)
         
         # Update share group total size
         share_group.total_size += file_size
@@ -185,7 +195,7 @@ async def save_file(file: UploadFile, share_group: ShareGroup) -> dict:
     except Exception as e:
         logger.error(f"Error saving file: {e}")
         if 'file_path' in locals() and file_path.exists():
-            file_path.unlink()
+            await aiofiles.os.remove(file_path)
         raise HTTPException(status_code=500, detail="Failed to save file")
 
 async def cleanup_share_group(group_id: str):
@@ -201,18 +211,16 @@ async def cleanup_share_group(group_id: str):
                 logger.error(f"Error deleting file {filename}: {e}")
         SHARE_GROUPS.pop(group_id)
 
-async def cleanup_expired():
+def cleanup_expired():
     """Remove expired share groups"""
     current_time = time.time()
-    expired_groups = []
-    
-    for group_id, group in SHARE_GROUPS.items():
-        if group.expiry < current_time:
-            expired_groups.append(group_id)
-            logger.info(f"Cleaning up expired group {group_id}, expired at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(group.expiry))}")
+    expired_groups = [
+        group_id for group_id, group in SHARE_GROUPS.items()
+        if group.expiry < current_time
+    ]
     
     for group_id in expired_groups:
-        await cleanup_share_group(group_id)
+        asyncio.create_task(cleanup_share_group(group_id))
 
 # API Endpoints
 @app.get("/")
@@ -269,18 +277,14 @@ async def upload_files(
         if not 1 <= expiry_seconds <= max_seconds:
             raise HTTPException(
                 status_code=400,
-                detail=f"Expiry time must be between 1 second and {max_seconds} seconds (7 days)"
+                detail="Expiry time must be between 1 second and 7 days"
             )
         
-        # Create share group with precise expiry time
+        # Create share group
         share_group = create_share_group(expiry_seconds)
         share_group.one_time_download = one_time_download
         
-        # Log creation time and expiry time for debugging
-        logger.info(f"Creating share group with expiry in {expiry_seconds} seconds")
-        logger.info(f"Share group will expire at: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(share_group.expiry))}")
-        
-        # Save files
+        # Save files with chunked reading
         for file in files:
             file_metadata = await save_file(file, share_group)
             share_group.files[file_metadata['stored_name']] = file_metadata
@@ -300,31 +304,25 @@ async def upload_files(
         raise
     except Exception as e:
         logger.error(f"Upload error: {e}")
-        raise HTTPException(status_code=500, detail="Upload failed")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/download/{group_id}")
 async def download_page(request: Request, group_id: str):
     """Show download page"""
     if group_id not in SHARE_GROUPS:
-        logger.info(f"Share group {group_id} not found")
         return templates.TemplateResponse("expired.html", {
             "request": request,
             "message": "This share link has expired or does not exist."
         })
     
     share_group = SHARE_GROUPS[group_id]
-    current_time = time.time()
-    
-    if share_group.expiry < current_time:
-        logger.info(f"Share group {group_id} expired at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(share_group.expiry))}")
+    if share_group.expiry < time.time():
         await cleanup_share_group(group_id)
         return templates.TemplateResponse("expired.html", {
             "request": request,
             "message": "This share link has expired."
         })
-    
-    # Add logging for debugging
-    logger.info(f"Serving share group {group_id}, expires at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(share_group.expiry))}")
     
     files = []
     for stored_name, file_data in share_group.files.items():
@@ -381,28 +379,24 @@ async def download_file(group_id: str, filename: str):
         share_group.files[decoded_filename]['downloads'] += 1
         share_group.download_count += 1
 
+        # Handle one-time downloads
+        if share_group.one_time_download:
+            asyncio.create_task(cleanup_share_group(group_id))
+
         # Set proper headers for download
         headers = {
             "Content-Disposition": f'attachment; filename="{file_info["original_name"]}"',
             "Access-Control-Expose-Headers": "Content-Disposition"
         }
 
-        # Create response
-        response = FileResponse(
+        logger.info(f"Serving file: {decoded_filename} as {file_info['original_name']}")
+
+        return FileResponse(
             path=file_path,
             filename=file_info['original_name'],
             media_type=file_info['mime_type'],
             headers=headers
         )
-
-        # Handle one-time downloads - cleanup only if it's a one-time download
-        if share_group.one_time_download:
-            # Schedule cleanup to run after response is sent
-            asyncio.create_task(cleanup_share_group(group_id))
-            logger.info(f"One-time download completed for group {group_id}, scheduled for cleanup")
-
-        logger.info(f"Serving file: {decoded_filename} as {file_info['original_name']}")
-        return response
 
     except HTTPException:
         raise
@@ -457,40 +451,13 @@ def setup_app():
     """Initialize application"""
     verify_storage_path()
     
-    # Setup scheduler with less frequent cleanup
+    # Setup scheduler
     scheduler = BackgroundScheduler()
-    # Run cleanup every hour instead of every 30 minutes
-    scheduler.add_job(cleanup_expired, 'interval', hours=1)
+    scheduler.add_job(cleanup_expired, 'interval', minutes=FILE_CLEANUP_INTERVAL)
     scheduler.start()
-    logger.info("Background scheduler started")
 
 # Initialize app
 setup_app()
-
-@app.get("/download-all/{group_id}")
-async def download_all_files(group_id: str):
-    """Download all files in the share group as a zip file"""
-    logger.info(f"Attempting to download all files for group: {group_id}")
-    
-    if group_id not in SHARE_GROUPS:
-        logger.error(f"Share group {group_id} not found")
-        raise HTTPException(status_code=404, detail="Share group not found")
-
-    share_group = SHARE_GROUPS[group_id]
-    zip_buffer = io.BytesIO()
-    
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        for filename, file_data in share_group.files.items():
-            file_path = STORAGE_PATH / filename
-            if file_path.exists():
-                logger.info(f"Adding {filename} to zip")
-                zip_file.write(file_path, arcname=filename)
-            else:
-                logger.warning(f"File {filename} does not exist")
-
-    zip_buffer.seek(0)
-    logger.info("All files zipped successfully")
-    return StreamingResponse(zip_buffer, media_type="application/zip", headers={"Content-Disposition": f"attachment; filename=all_files.zip"})
 
 if __name__ == "__main__":
     import uvicorn
