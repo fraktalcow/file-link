@@ -519,5 +519,7 @@ def setup_app():
 setup_app()
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))  # Default to 8000 if PORT is not set
-    uvicorn.run("app:app", host="0.0.0.0", port=port)
+    import uvicorn
+    port = int(os.environ.get("PORT", 10000))  # Default to Render's default port 10000
+    logger.info(f"Starting server on port {port}")
+    uvicorn.run("app:app", host="0.0.0.0", port=port, log_level="info")
