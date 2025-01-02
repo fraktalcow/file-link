@@ -107,11 +107,28 @@ def format_size(size: int) -> str:
 
 def create_share_group(expiry_seconds: int) -> ShareGroup:
     """Create a new share group"""
-    group_id = f"{int(time.time())}_{secrets.token_urlsafe(8)}"
-    return ShareGroup(
+    timestamp = int(time.time())
+    token = secrets.token_urlsafe(8)
+    group_id = f"{timestamp}_{token}"
+    
+    logger.info(f"Creating new share group with ID: {group_id}")
+    logger.info(f"Expiry seconds: {expiry_seconds}")
+    logger.info(f"Expiry time will be: {datetime.fromtimestamp(timestamp + expiry_seconds)}")
+    
+    # Ensure the ID is unique
+    while group_id in SHARE_GROUPS:
+        logger.warning(f"Group ID collision detected: {group_id}")
+        token = secrets.token_urlsafe(8)
+        group_id = f"{timestamp}_{token}"
+        logger.info(f"Generated new group ID: {group_id}")
+    
+    share_group = ShareGroup(
         group_id=group_id,
-        expiry=time.time() + expiry_seconds
+        expiry=timestamp + expiry_seconds
     )
+    
+    logger.info(f"Share group created successfully: {group_id}")
+    return share_group
 
 class EncryptedFileHandler:
     def __init__(self):
@@ -200,27 +217,44 @@ async def save_file(file: UploadFile, share_group: ShareGroup) -> dict:
 
 async def cleanup_share_group(group_id: str):
     """Clean up a share group and its files"""
+    logger.info(f"Starting cleanup for share group: {group_id}")
     if group_id in SHARE_GROUPS:
         share_group = SHARE_GROUPS[group_id]
+        logger.info(f"Found share group {group_id} with {len(share_group.files)} files")
         for filename in share_group.files:
             file_path = STORAGE_PATH / filename
             try:
                 if file_path.exists():
-                    await aiofiles.os.remove(file_path)  # Use aiofiles for async file removal
+                    await aiofiles.os.remove(file_path)
+                    logger.info(f"Deleted file: {file_path}")
+                else:
+                    logger.warning(f"File not found during cleanup: {file_path}")
             except Exception as e:
                 logger.error(f"Error deleting file {filename}: {e}")
         SHARE_GROUPS.pop(group_id)
+        logger.info(f"Share group {group_id} removed. Remaining groups: {list(SHARE_GROUPS.keys())}")
+    else:
+        logger.warning(f"Share group {group_id} not found during cleanup")
 
 def cleanup_expired():
     """Remove expired share groups"""
     current_time = time.time()
+    logger.info("Starting expired share groups cleanup")
+    logger.info(f"Current share groups before cleanup: {list(SHARE_GROUPS.keys())}")
+    
     expired_groups = [
         group_id for group_id, group in SHARE_GROUPS.items()
         if group.expiry < current_time
     ]
     
-    for group_id in expired_groups:
-        asyncio.create_task(cleanup_share_group(group_id))
+    if expired_groups:
+        logger.info(f"Found {len(expired_groups)} expired groups: {expired_groups}")
+        for group_id in expired_groups:
+            asyncio.create_task(cleanup_share_group(group_id))
+    else:
+        logger.info("No expired groups found")
+    
+    logger.info(f"Current share groups after cleanup: {list(SHARE_GROUPS.keys())}")
 
 # API Endpoints
 @app.get("/")
@@ -272,6 +306,9 @@ async def upload_files(
 ):
     """Handle file uploads"""
     try:
+        logger.info(f"Starting upload process with {len(files)} files")
+        logger.info(f"Current share groups before upload: {list(SHARE_GROUPS.keys())}")
+        
         # Validate expiry time
         max_seconds = 168 * 3600  # 7 days
         if not 1 <= expiry_seconds <= max_seconds:
@@ -283,22 +320,62 @@ async def upload_files(
         # Create share group
         share_group = create_share_group(expiry_seconds)
         share_group.one_time_download = one_time_download
+        logger.info(f"Created new share group: {share_group.group_id}")
         
-        # Save files with chunked reading
+        total_size = 0
+        file_errors = []
+        
+        # Process files with validation
         for file in files:
-            file_metadata = await save_file(file, share_group)
-            share_group.files[file_metadata['stored_name']] = file_metadata
+            try:
+                logger.info(f"Processing file: {file.filename}")
+                # Validate file size before reading
+                file_size = 0
+                chunk_size = 8192  # Read in 8KB chunks to check size
+                
+                while chunk := await file.read(chunk_size):
+                    file_size += len(chunk)
+                    if file_size > MAX_FILE_SIZE:
+                        raise ValueError(f"File {file.filename} exceeds maximum size of {format_size(MAX_FILE_SIZE)}")
+                
+                # Reset file position for actual save
+                await file.seek(0)
+                
+                # Check total size
+                if total_size + file_size > MAX_TOTAL_SIZE:
+                    raise ValueError(f"Total size would exceed maximum of {format_size(MAX_TOTAL_SIZE)}")
+                
+                # Save file
+                file_metadata = await save_file(file, share_group)
+                share_group.files[file_metadata['stored_name']] = file_metadata
+                total_size += file_size
+                logger.info(f"Successfully saved file: {file.filename} ({format_size(file_size)})")
+                
+            except Exception as e:
+                logger.error(f"Error processing file {file.filename}: {str(e)}")
+                file_errors.append({"filename": file.filename, "error": str(e)})
+                continue
+        
+        if not share_group.files:
+            raise HTTPException(status_code=400, detail="No valid files were uploaded")
         
         # Store share group
         SHARE_GROUPS[share_group.group_id] = share_group
+        logger.info(f"Share group {share_group.group_id} saved with {len(share_group.files)} files")
+        logger.info(f"Current share groups after upload: {list(SHARE_GROUPS.keys())}")
         
-        return {
+        response_data = {
             'share_url': f"/download/{share_group.group_id}",
             'expiry_time': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(share_group.expiry)),
             'file_count': len(share_group.files),
             'total_size': format_size(share_group.total_size),
             'one_time_download': one_time_download
         }
+        
+        if file_errors:
+            response_data['errors'] = file_errors
+            
+        return response_data
         
     except HTTPException:
         raise
@@ -403,35 +480,6 @@ async def download_file(group_id: str, filename: str):
     except Exception as e:
         logger.error(f"Download error: {str(e)}")
         raise HTTPException(status_code=500, detail="Download failed")
-
-@app.post("/upload-progress")
-async def upload_progress(request: Request):
-    """Stream upload progress"""
-    async def progress_generator():
-        while True:
-            progress = request.state.upload_progress
-            yield f"data: {progress}\n\n"
-            await asyncio.sleep(0.1)
-    
-    return StreamingResponse(progress_generator(), media_type="text/event-stream")
-
-async def compress_files(files: List[UploadFile]) -> bytes:
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        for file in files:
-            content = await file.read()
-            zip_file.writestr(file.filename, content)
-    return zip_buffer.getvalue()
-
-@app.post("/compress-files")
-async def compress_uploaded_files(files: List[UploadFile] = File(...)):
-    """Compress multiple files before upload"""
-    compressed_content = await compress_files(files)
-    return StreamingResponse(
-        io.BytesIO(compressed_content),
-        media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=compressed_files.zip"}
-    )
 
 # Add this function to help debug file storage
 def verify_storage_path():

@@ -1,27 +1,58 @@
-// Theme handling
+// Theme handling with debug logging
 function initTheme() {
-    const theme = localStorage.getItem('theme') || 'light';
-    document.body.classList.toggle('dark', theme === 'dark');
-    updateThemeIcons(theme);
+    console.log('Initializing theme...');
+    try {
+        const theme = localStorage.getItem('theme') || 'light';
+        document.body.classList.toggle('dark', theme === 'dark');
+        console.log('Theme set to:', theme);
+        
+        // Only try to update theme icons if they exist
+        const darkIcon = document.getElementById('theme-toggle-dark-icon');
+        const lightIcon = document.getElementById('theme-toggle-light-icon');
+        
+        if (darkIcon && lightIcon) {
+            console.log('Theme icons found, updating...');
+            updateThemeIcons(theme);
+        } else {
+            console.log('Theme icons not found, skipping icon update');
+        }
+    } catch (error) {
+        console.warn('Error initializing theme:', error);
+    }
 }
 
 function updateThemeIcons(theme) {
-    const darkIcon = document.getElementById('theme-toggle-dark-icon');
-    const lightIcon = document.getElementById('theme-toggle-light-icon');
-    
-    if (theme === 'dark') {
-        darkIcon.classList.add('hidden');
-        lightIcon.classList.remove('hidden');
-    } else {
-        lightIcon.classList.add('hidden');
-        darkIcon.classList.remove('hidden');
+    try {
+        const darkIcon = document.getElementById('theme-toggle-dark-icon');
+        const lightIcon = document.getElementById('theme-toggle-light-icon');
+        
+        if (!darkIcon || !lightIcon) {
+            console.log('Theme icons not available for update');
+            return;
+        }
+        
+        if (theme === 'dark') {
+            darkIcon.classList.add('hidden');
+            lightIcon.classList.remove('hidden');
+        } else {
+            lightIcon.classList.add('hidden');
+            darkIcon.classList.remove('hidden');
+        }
+        console.log('Theme icons updated successfully');
+    } catch (error) {
+        console.warn('Error updating theme icons:', error);
     }
 }
 
 function toggleTheme() {
-    const isDark = document.body.classList.toggle('dark');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    updateThemeIcons(isDark ? 'dark' : 'light');
+    try {
+        const isDark = document.body.classList.toggle('dark');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        updateThemeIcons(isDark ? 'dark' : 'light');
+        console.log('Theme toggled to:', isDark ? 'dark' : 'light');
+    } catch (error) {
+        console.warn('Error toggling theme:', error);
+    }
 }
 
 // File upload handling
@@ -37,15 +68,27 @@ class FileUploadManager {
         this.results = document.getElementById('results');
         this.linkList = document.getElementById('linkList');
         
+        this.maxFileSize = 500 * 1024 * 1024; // 500MB
+        this.maxTotalSize = 1024 * 1024 * 1024; // 1GB
+        
         this.initializeEventListeners();
     }
 
     initializeEventListeners() {
+        // Prevent default drag behaviors on the entire document
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+
         // File input change
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
 
-        // Drag and drop
-        this.dropZone.addEventListener('dragover', (e) => this.handleDragOver(e));
+        // Drag and drop events
+        this.dropZone.addEventListener('dragenter', () => this.handleDragEnter());
+        this.dropZone.addEventListener('dragover', () => this.handleDragOver());
         this.dropZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
         this.dropZone.addEventListener('drop', (e) => this.handleDrop(e));
 
@@ -53,36 +96,105 @@ class FileUploadManager {
         this.uploadForm.addEventListener('submit', (e) => this.handleSubmit(e));
     }
 
-    handleFileSelect(event) {
-        const files = Array.from(event.target.files);
-        this.addFiles(files);
-    }
-
-    handleDragOver(event) {
-        event.preventDefault();
+    handleDragEnter() {
         this.dragOverlay.classList.remove('hidden');
+        this.dropZone.classList.add('drag-active');
     }
 
-    handleDragLeave(event) {
-        event.preventDefault();
+    handleDragOver() {
+        this.dragOverlay.classList.remove('hidden');
+        this.dropZone.classList.add('drag-active');
+        return false;
+    }
+
+    handleDragLeave(e) {
+        // Only hide overlay if we're leaving the drop zone (not entering a child element)
+        if (!e.relatedTarget || !this.dropZone.contains(e.relatedTarget)) {
+            this.dragOverlay.classList.add('hidden');
+            this.dropZone.classList.remove('drag-active');
+        }
+    }
+
+    handleDrop(e) {
         this.dragOverlay.classList.add('hidden');
+        this.dropZone.classList.remove('drag-active');
+        
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        this.processFiles(droppedFiles);
     }
 
-    handleDrop(event) {
-        event.preventDefault();
-        this.dragOverlay.classList.add('hidden');
-        const files = Array.from(event.dataTransfer.files);
-        this.addFiles(files);
+    handleFileSelect(event) {
+        const selectedFiles = Array.from(event.target.files);
+        this.processFiles(selectedFiles);
+        // Reset file input to allow selecting the same file again
+        this.fileInput.value = '';
     }
 
-    addFiles(files) {
-        files.forEach(file => {
+    processFiles(newFiles) {
+        // Calculate current total size
+        let currentTotalSize = Array.from(this.files.values())
+            .reduce((total, file) => total + file.size, 0);
+
+        newFiles.forEach(file => {
+            // Check file size
+            if (file.size > this.maxFileSize) {
+                this.showError(`File "${file.name}" exceeds maximum size of ${this.formatSize(this.maxFileSize)}`);
+                return;
+            }
+
+            // Check total size
+            if (currentTotalSize + file.size > this.maxTotalSize) {
+                this.showError(`Adding "${file.name}" would exceed total size limit of ${this.formatSize(this.maxTotalSize)}`);
+                return;
+            }
+
+            // Check file extension
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            if (!this.isAllowedExtension(ext)) {
+                this.showError(`File type "${ext}" is not allowed`);
+                return;
+            }
+
+            // Add file if it passes all checks
             const fileId = crypto.randomUUID();
             this.files.set(fileId, file);
             this.addFilePreview(fileId, file);
+            currentTotalSize += file.size;
         });
-        
+
         this.updateSubmitButton();
+    }
+
+    isAllowedExtension(ext) {
+        const allowedExtensions = [
+            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp',
+            '.pdf', '.doc', '.docx', '.txt', '.rtf', '.csv', '.xlsx', '.xls',
+            '.zip', '.rar', '.7z', '.tar', '.gz',
+            '.mp3', '.mp4', '.wav', '.avi', '.mkv',
+            '.py', '.js', '.html', '.css', '.json', '.xml'
+        ];
+        return allowedExtensions.includes(ext.toLowerCase());
+    }
+
+    showError(message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'fixed bottom-4 right-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-lg';
+        errorDiv.textContent = message;
+        document.body.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
+    }
+
+    formatSize(bytes) {
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let size = bytes;
+        let unitIndex = 0;
+        
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex++;
+        }
+        
+        return `${size.toFixed(1)} ${units[unitIndex]}`;
     }
 
     addFilePreview(fileId, file) {
@@ -126,19 +238,6 @@ class FileUploadManager {
 
     updateSubmitButton() {
         this.submitButton.disabled = this.files.size === 0;
-    }
-
-    formatSize(bytes) {
-        const units = ['B', 'KB', 'MB', 'GB'];
-        let size = bytes;
-        let unitIndex = 0;
-        
-        while (size >= 1024 && unitIndex < units.length - 1) {
-            size /= 1024;
-            unitIndex++;
-        }
-        
-        return `${size.toFixed(1)} ${units[unitIndex]}`;
     }
 
     async handleSubmit(event) {

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" 
       data-files='{{ files|tojson|safe }}'
+      data-group-id="{{ request.path.split('/')[-1] }}"
       data-one-time-download="{{ 'true' if one_time_download else 'false' }}">
 <head>
     <meta charset="UTF-8">
@@ -91,10 +92,11 @@
 
                     <!-- Add a new area for downloading all files -->
                     <div class="flex items-end justify-end">
-                        <a href="/download-all/{{ group_id }}" 
-                           class="download-btn px-4 py-2 rounded-lg bg-accent-primary text-white hover:bg-accent-secondary transition-colors border-none">
-                            Download All Files
-                        </a>
+                        <button id="downloadAllBtn"
+                                class="download-btn px-4 py-2 rounded-lg bg-accent-primary text-white hover:bg-accent-secondary transition-colors border-none"
+                                data-group-id="{{ request.path.split('/')[-1] }}">
+                            <span>Download All Files</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -115,16 +117,46 @@
     </div>
     {% endif %}
 
-    <script src="/static/app.js"></script>
+    <!-- Add JSZip library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="/static/download.js"></script>
     <script>
-        // Initialize theme and download manager
         document.addEventListener('DOMContentLoaded', () => {
-            initTheme();
-            const htmlElement = document.documentElement;
-            const files = JSON.parse(htmlElement.dataset.files);
-            const oneTimeDownload = htmlElement.dataset.oneTimeDownload === 'true';
-            window.downloadManager = new DownloadManager(files, oneTimeDownload);
+            try {
+                // Get the download button first
+                const downloadBtn = document.getElementById('downloadAllBtn');
+                if (!downloadBtn) {
+                    console.error('Download button not found in the page');
+                    return;
+                }
+
+                // Get the data from the HTML element
+                const htmlElement = document.documentElement;
+                const files = JSON.parse(htmlElement.dataset.files || '[]');
+                const groupId = downloadBtn.dataset.groupId;
+                const oneTimeDownload = htmlElement.dataset.oneTimeDownload === 'true';
+                
+                // Debug logging
+                console.log('Button found:', downloadBtn);
+                console.log('Button group ID:', groupId);
+                console.log('Files data:', files);
+                console.log('One-time download:', oneTimeDownload);
+                
+                if (!window.DownloadManager) {
+                    console.error('DownloadManager class not found. Make sure download.js is loaded correctly.');
+                    return;
+                }
+                
+                if (!groupId) {
+                    console.error('Group ID not found in page data.');
+                    return;
+                }
+                
+                window.downloadManager = new DownloadManager(files, oneTimeDownload, groupId);
+                console.log('Download manager initialized successfully');
+            } catch (error) {
+                console.error('Error initializing download manager:', error);
+            }
         });
     </script>
 </body>

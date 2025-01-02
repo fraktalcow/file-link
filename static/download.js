@@ -2,312 +2,123 @@
 const MAX_FILE_SIZE = 500 * 1024 * 1024;  // 500MB
 const MAX_TOTAL_SIZE = 1024 * 1024 * 1024;  // 1GB
 
-class DownloadManager {
-    constructor(files, oneTimeDownload) {
+// Define the DownloadManager class in the global scope
+window.DownloadManager = class DownloadManager {
+    constructor(files, oneTimeDownload, groupId) {
+        console.log('DownloadManager constructor called with:', {
+            filesCount: files.length,
+            oneTimeDownload,
+            groupId
+        });
+        
+        if (!groupId) {
+            throw new Error('Group ID is required');
+        }
+        
         this.files = files;
         this.oneTimeDownload = oneTimeDownload;
-        this.formData = new FormData(); // Initialize FormData here
-        this.fileList = new Set(); // Track added files
-        this.initializeEventListeners();
-        console.log('DownloadManager initialized with', files.length, 'files');
+        this.groupId = groupId;
+        this.initializeDownloadAll();
     }
 
-    initializeEventListeners() {
-        // Get the drop zone element
-        const dropZone = document.querySelector('.drop-zone');
-        const dragOverlay = document.getElementById('dragOverlay');
-        const fileInput = document.getElementById('fileInput');
-
-        if (dropZone && dragOverlay) {
-            // Prevent default drag behaviors
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, this.preventDefaults.bind(this), false);
-                document.body.addEventListener(eventName, this.preventDefaults.bind(this), false);
-            });
-
-            // Highlight drop zone when dragging over it
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropZone.addEventListener(eventName, () => {
-                    dragOverlay.classList.remove('hidden');
-                    dropZone.classList.add('drag-active');
-                });
-            });
-
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, () => {
-                    dragOverlay.classList.add('hidden');
-                    dropZone.classList.remove('drag-active');
-                });
-            });
-
-            // Handle dropped files
-            dropZone.addEventListener('drop', (e) => {
-                const droppedFiles = Array.from(e.dataTransfer.files);
-                this.handleFiles(droppedFiles);
-            });
-
-            // Handle file input change
-            if (fileInput) {
-                fileInput.addEventListener('change', (e) => {
-                    const selectedFiles = Array.from(e.target.files);
-                    this.handleFiles(selectedFiles);
-                    // Reset file input to allow selecting the same file again
-                    fileInput.value = '';
-                });
-            }
+    initializeDownloadAll() {
+        console.log('Initializing download button...');
+        this.downloadAllBtn = document.getElementById('downloadAllBtn');
+        
+        if (!this.downloadAllBtn) {
+            console.error('Download button not found in the DOM');
+            return;
         }
+        
+        console.log('Adding click listener to download button');
+        this.downloadAllBtn.addEventListener('click', async (e) => {
+            console.log('Download button clicked');
+            await this.handleDownloadAll(e);
+        });
     }
 
-    preventDefaults(e) {
+    async handleDownloadAll(e) {
+        console.log('Starting download process...');
         e.preventDefault();
-        e.stopPropagation();
-    }
 
-    handleFiles(files) {
-        // Validate individual file sizes and total size
-        let totalSize = this.calculateCurrentTotalSize();
-        const invalidFiles = [];
-        const validFiles = [];
-
-        for (const file of files) {
-            // Check if file is already added
-            if (this.fileList.has(file.name)) {
-                invalidFiles.push({
-                    name: file.name,
-                    reason: 'already added'
-                });
-                continue;
-            }
-
-            if (file.size > MAX_FILE_SIZE) {
-                invalidFiles.push({
-                    name: file.name,
-                    reason: `exceeds maximum file size of ${this.formatSize(MAX_FILE_SIZE)}`
-                });
-                continue;
-            }
-            
-            totalSize += file.size;
-            if (totalSize > MAX_TOTAL_SIZE) {
-                invalidFiles.push({
-                    name: file.name,
-                    reason: 'would exceed total size limit'
-                });
-                continue;
-            }
-
-            validFiles.push(file);
-            this.fileList.add(file.name);
-        }
-
-        // Add valid files to form data and display them
-        validFiles.forEach(file => {
-            this.formData.append('files', file);
-            this.addFilePreview(file);
-        });
-
-        // Show any errors
-        if (invalidFiles.length > 0) {
-            const message = invalidFiles.map(f => 
-                `${f.name}: ${f.reason}`
-            ).join('\n');
-            alert(`Some files cannot be uploaded:\n${message}`);
-        }
-
-        // Enable/disable submit button based on whether we have files
-        this.updateSubmitButton();
-    }
-
-    calculateCurrentTotalSize() {
-        let totalSize = 0;
-        for (const [key, value] of this.formData.entries()) {
-            if (value instanceof File) {
-                totalSize += value.size;
+        if (this.oneTimeDownload) {
+            console.log('One-time download detected, showing confirmation');
+            if (!confirm("Warning: This is a one-time download link. Once you download these files, they will no longer be accessible. Do you want to continue?")) {
+                console.log('User cancelled one-time download');
+                return;
             }
         }
-        return totalSize;
-    }
 
-    addFilePreview(file) {
-        const fileListElement = document.getElementById('fileList');
-        if (!fileListElement) return;
-
-        const fileElement = document.createElement('div');
-        fileElement.className = 'file-card rounded-xl p-4 border border-gray-100';
-        fileElement.dataset.fileName = file.name;
-        
-        fileElement.innerHTML = `
-            <div class="flex items-center gap-4">
-                <div class="flex-shrink-0 w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
-                    <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                              d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                    </svg>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 truncate">${file.name}</h3>
-                    <p class="text-sm text-gray-500">${this.formatSize(file.size)}</p>
-                </div>
-                <button type="button" onclick="fileUploadManager.removeFile('${file.name}')"
-                        class="text-gray-400 hover:text-red-500 transition-colors">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-        `;
-        
-        fileListElement.appendChild(fileElement);
-    }
-
-    removeFile(fileName) {
-        // Remove from FormData
-        const newFormData = new FormData();
-        for (const [key, value] of this.formData.entries()) {
-            if (key === 'files' && value instanceof File && value.name === fileName) {
-                continue;
-            }
-            newFormData.append(key, value);
-        }
-        this.formData = newFormData;
-        this.fileList.delete(fileName);
-
-        // Remove from UI
-        const element = document.querySelector(`[data-file-name="${fileName}"]`);
-        if (element) {
-            element.remove();
-        }
-
-        this.updateSubmitButton();
-    }
-
-    // Add helper method to format file sizes
-    formatSize(bytes) {
-        const units = ['B', 'KB', 'MB', 'GB'];
-        let size = bytes;
-        let unitIndex = 0;
-        
-        while (size >= 1024 && unitIndex < units.length - 1) {
-            size /= 1024;
-            unitIndex++;
-        }
-        
-        return `${size.toFixed(1)} ${units[unitIndex]}`;
-    }
-
-    async uploadFiles(formData) {
         try {
-            // Create and show progress element
-            const progressElement = this.createProgressElement();
-            
-            const response = await fetch('/upload', {
-                method: 'POST',
-                body: formData,
-                // Add signal to track upload progress
-                signal: this.createProgressSignal(progressElement)
-            });
-
-            // Remove progress element after upload
-            progressElement.remove();
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.detail || 'Upload failed');
-            }
-
-            this.showUploadResult(result);
-        } catch (error) {
-            console.error('Upload error:', error);
-            // Don't show alert if it was an abort
-            if (error.name !== 'AbortError') {
-                alert(error.message || 'Upload failed. Please try again.');
-            }
-        }
-    }
-
-    createProgressElement() {
-        const progressElement = document.createElement('div');
-        progressElement.className = 'fixed bottom-4 right-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg z-50';
-        progressElement.innerHTML = `
-            <div class="flex items-center gap-4">
-                <div class="flex-1">
-                    <div class="h-2 bg-gray-200 rounded-full">
-                        <div class="progress-bar h-2 bg-blue-500 rounded-full w-0 transition-all duration-300"></div>
-                    </div>
-                    <div class="text-sm mt-2">
-                        <span class="progress-text">Uploading...</span>
-                        <button class="cancel-upload ml-2 text-red-500 hover:text-red-600">Cancel</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(progressElement);
-
-        // Add cancel handler
-        const cancelButton = progressElement.querySelector('.cancel-upload');
-        cancelButton.addEventListener('click', () => {
-            if (this.abortController) {
-                this.abortController.abort();
-            }
-        });
-
-        return progressElement;
-    }
-
-    createProgressSignal(progressElement) {
-        this.abortController = new AbortController();
-        const progressBar = progressElement.querySelector('.progress-bar');
-        const progressText = progressElement.querySelector('.progress-text');
-
-        // Track upload progress
-        const contentLength = Array.from(this.formData.values()).reduce((total, value) => {
-            return total + (value instanceof File ? value.size : value.length);
-        }, 0);
-
-        let uploadedSize = 0;
-        const upload = new TransformStream({
-            transform(chunk, controller) {
-                uploadedSize += chunk.length;
-                const progress = (uploadedSize / contentLength) * 100;
-                progressBar.style.width = `${progress}%`;
-                progressText.textContent = `Uploading... ${Math.round(progress)}%`;
-                controller.enqueue(chunk);
-            }
-        });
-
-        return this.abortController.signal;
-    }
-
-    showUploadResult(result) {
-        const resultsDiv = document.getElementById('results');
-        const linkList = document.getElementById('linkList');
-
-        if (resultsDiv && linkList) {
-            resultsDiv.classList.remove('hidden');
-            
-            const shareUrl = `${window.location.origin}${result.share_url}`;
-            const linkElement = document.createElement('div');
-            linkElement.className = 'bg-gray-50 dark:bg-gray-700 rounded-lg p-4';
-            linkElement.innerHTML = `
-                <div class="flex items-center justify-between gap-4">
-                    <input type="text" value="${shareUrl}" readonly
-                           class="flex-1 bg-transparent border-0 focus:ring-0 text-sm text-gray-600 dark:text-gray-300">
-                    <button onclick="navigator.clipboard.writeText('${shareUrl}')"
-                            class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 transition-colors text-sm">
-                        Copy Link
-                    </button>
-                </div>
-                <div class="mt-2 text-sm text-gray-500">
-                    <p>Expires: ${result.expiry_time}</p>
-                    <p>Files: ${result.file_count}</p>
-                    <p>Total size: ${result.total_size}</p>
-                    ${result.one_time_download ? '<p class="text-orange-500">⚠️ One-time download link</p>' : ''}
-                </div>
+            // Show loading state
+            this.downloadAllBtn.disabled = true;
+            this.downloadAllBtn.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Preparing Download...
             `;
 
-            linkList.innerHTML = '';
-            linkList.appendChild(linkElement);
+            // Create a new array of promises for downloading each file
+            const downloadPromises = this.files.map(async (file) => {
+                const response = await fetch(file.download_url);
+                if (!response.ok) throw new Error(`Failed to download ${file.original_name}`);
+                return {
+                    name: file.original_name,
+                    data: await response.blob()
+                };
+            });
+
+            // Wait for all downloads to complete
+            const downloadedFiles = await Promise.all(downloadPromises);
+
+            // Create a zip file using JSZip
+            const zip = new JSZip();
+            downloadedFiles.forEach(file => {
+                zip.file(file.name, file.data);
+            });
+
+            // Generate the zip file
+            const zipBlob = await zip.generateAsync({type: 'blob'});
+
+            // Create a download link for the zip
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const zipFilename = `shared_files_${timestamp}.zip`;
+            const url = window.URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = zipFilename;
+            document.body.appendChild(a);
+            
+            console.log('Triggering download...');
+            a.click();
+            
+            // Cleanup
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            console.log('Download triggered and cleanup completed');
+
+            // If it's a one-time download, show a message and disable the button
+            if (this.oneTimeDownload) {
+                console.log('Handling one-time download completion');
+                setTimeout(() => {
+                    this.downloadAllBtn.innerHTML = 'Files Downloaded';
+                    this.downloadAllBtn.disabled = true;
+                }, 2000);
+            } else {
+                console.log('Resetting download button');
+                setTimeout(() => {
+                    this.downloadAllBtn.disabled = false;
+                    this.downloadAllBtn.innerHTML = 'Download All Files';
+                }, 2000);
+            }
+        } catch (error) {
+            console.error('Download error:', error);
+            alert(`Failed to download files: ${error.message}`);
+            this.downloadAllBtn.disabled = false;
+            this.downloadAllBtn.innerHTML = 'Download All Files';
         }
     }
-} 
+}; 

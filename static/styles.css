@@ -107,13 +107,10 @@ body.dark {
 }
 
 .download-btn {
-    background: var(--accent-primary-light);
-    color: white;
-    transition: all 0.3s ease;
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-weight: 500;
 }
 
 .dark .download-btn {
@@ -318,4 +315,69 @@ input[type="checkbox"]:checked {
 
 #downloadAllBtn:hover svg {
     transform: translateY(1px);
+}
+
+.drag-active {
+    border-color: #4F46E5;
+    background-color: rgba(79, 70, 229, 0.05);
+    transform: scale(1.02);
+    transition: all 0.2s ease;
+}
+
+.drop-zone {
+    transition: all 0.2s ease;
+    border: 2px dashed #E5E7EB;
+}
+
+.drop-zone:hover {
+    border-color: #4F46E5;
+    background-color: rgba(79, 70, 229, 0.05);
+}
+
+/* Add animation for error messages */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.fixed.bottom-4.right-4 {
+    animation: slideIn 0.3s ease-out;
+}
+
+.download-btn.loading {
+    cursor: wait;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.download-btn.loading:hover {
+    transform: none;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.loading {
+    cursor: wait !important;
+    opacity: 0.7;
+}
+
+.loading svg {
+    display: inline-block;
 } 
