@@ -381,8 +381,8 @@ class FileUploadManager {
             <div class="flex items-center justify-between gap-4">
                 <input type="text" value="${shareUrl}" readonly
                        class="flex-1 bg-transparent border-0 focus:ring-0 text-sm text-text-primary-light dark:text-text-primary-dark">
-                <button onclick="navigator.clipboard.writeText('${shareUrl}')"
-                        class="px-3 py-1 bg-accent-primary-light dark:bg-accent-primary-dark text-text-primary-light dark:text-text-primary-dark rounded hover:bg-accent-secondary-light dark:hover:bg-accent-secondary-dark focus:outline-none focus:ring-2 focus:ring-accent-primary-light dark:focus:ring-accent-primary-dark focus:ring-offset-2 transition-colors text-sm">
+                <button onclick="navigator.clipboard.writeText('${shareUrl}').then(() => this.classList.add('bg-green-500'), () => this.classList.add('bg-red-500'))"
+                        class="download-btn w-full sm:w-auto px-6 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 transition-all duration-200 font-medium">
                     Copy Link
                 </button>
             </div>
@@ -396,6 +396,31 @@ class FileUploadManager {
         
         this.linkList.innerHTML = '';
         this.linkList.appendChild(linkElement);
+
+        // Add click handler for the copy button
+        const copyButton = linkElement.querySelector('button');
+        copyButton.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                const originalText = copyButton.textContent;
+                copyButton.textContent = 'Copied!';
+                copyButton.classList.add('bg-green-500');
+                
+                setTimeout(() => {
+                    copyButton.textContent = originalText;
+                    copyButton.classList.remove('bg-green-500');
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                copyButton.textContent = 'Failed to copy';
+                copyButton.classList.add('bg-red-500');
+                
+                setTimeout(() => {
+                    copyButton.textContent = 'Copy Link';
+                    copyButton.classList.remove('bg-red-500');
+                }, 2000);
+            }
+        });
     }
 }
 
