@@ -251,7 +251,7 @@ async def cleanup_share_group(group_id: str):
         logger.warning(f"Share group {group_id} not found during cleanup")
 
 def cleanup_expired():
-    """Remove expired share groups"""
+    """Remove expired share groups and their files"""
     current_time = time.time()
     logger.info("Starting expired share groups cleanup")
     logger.info(f"Current share groups before cleanup: {list(SHARE_GROUPS.keys())}")
@@ -264,7 +264,7 @@ def cleanup_expired():
     if expired_groups:
         logger.info(f"Found {len(expired_groups)} expired groups: {expired_groups}")
         for group_id in expired_groups:
-            asyncio.create_task(cleanup_share_group(group_id))
+            asyncio.create_task(cleanup_share_group(group_id))  # Clean up files
     else:
         logger.info("No expired groups found")
     
@@ -504,7 +504,7 @@ def setup_app():
     
     # Setup scheduler
     scheduler = BackgroundScheduler()
-    scheduler.add_job(cleanup_expired, 'interval', minutes=FILE_CLEANUP_INTERVAL)
+    scheduler.add_job(cleanup_expired, 'interval', minutes=FILE_CLEANUP_INTERVAL)  # Run cleanup every 30 minutes
     scheduler.start()
 
 # Initialize app

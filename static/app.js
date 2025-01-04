@@ -1,60 +1,3 @@
-// Theme handling with debug logging
-function initTheme() {
-    console.log('Initializing theme...');
-    try {
-        const theme = localStorage.getItem('theme') || 'light';
-        document.body.classList.toggle('dark', theme === 'dark');
-        console.log('Theme set to:', theme);
-        
-        // Only try to update theme icons if they exist
-        const darkIcon = document.getElementById('theme-toggle-dark-icon');
-        const lightIcon = document.getElementById('theme-toggle-light-icon');
-        
-        if (darkIcon && lightIcon) {
-            console.log('Theme icons found, updating...');
-            updateThemeIcons(theme);
-        } else {
-            console.log('Theme icons not found, skipping icon update');
-        }
-    } catch (error) {
-        console.warn('Error initializing theme:', error);
-    }
-}
-
-function updateThemeIcons(theme) {
-    try {
-        const darkIcon = document.getElementById('theme-toggle-dark-icon');
-        const lightIcon = document.getElementById('theme-toggle-light-icon');
-        
-        if (!darkIcon || !lightIcon) {
-            console.log('Theme icons not available for update');
-            return;
-        }
-        
-        if (theme === 'dark') {
-            darkIcon.classList.add('hidden');
-            lightIcon.classList.remove('hidden');
-        } else {
-            lightIcon.classList.add('hidden');
-            darkIcon.classList.remove('hidden');
-        }
-        console.log('Theme icons updated successfully');
-    } catch (error) {
-        console.warn('Error updating theme icons:', error);
-    }
-}
-
-function toggleTheme() {
-    try {
-        const isDark = document.body.classList.toggle('dark');
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
-        updateThemeIcons(isDark ? 'dark' : 'light');
-        console.log('Theme toggled to:', isDark ? 'dark' : 'light');
-    } catch (error) {
-        console.warn('Error toggling theme:', error);
-    }
-}
-
 // File upload handling
 class FileUploadManager {
     constructor() {
@@ -365,7 +308,7 @@ class FileUploadManager {
         }
     }
 
-    showUploadResult(result) {
+    async showUploadResult(result) {
         // Clear file list
         this.fileList.innerHTML = '';
         this.files.clear();
@@ -379,10 +322,9 @@ class FileUploadManager {
         linkElement.className = 'bg-bg-tertiary-light dark:bg-bg-tertiary-dark rounded-lg p-4';
         linkElement.innerHTML = `
             <div class="flex items-center justify-between gap-4">
-                <input type="text" value="${shareUrl}" readonly
+                <input type="text" value="${shareUrl}" readonly id="shareUrlInput"
                        class="flex-1 bg-transparent border-0 focus:ring-0 text-sm text-text-primary-light dark:text-text-primary-dark">
-                <button onclick="navigator.clipboard.writeText('${shareUrl}').then(() => this.classList.add('bg-green-500'), () => this.classList.add('bg-red-500'))"
-                        class="download-btn w-full sm:w-auto px-6 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 transition-all duration-200 font-medium">
+                <button class="copy-btn w-full sm:w-auto px-6 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 transition-all duration-200 font-medium">
                     Copy Link
                 </button>
             </div>
@@ -396,44 +338,30 @@ class FileUploadManager {
         
         this.linkList.innerHTML = '';
         this.linkList.appendChild(linkElement);
-
+        
         // Add click handler for the copy button
-        const copyButton = linkElement.querySelector('button');
-        copyButton.addEventListener('click', async () => {
-            try {
-                await navigator.clipboard.writeText(shareUrl);
-                const originalText = copyButton.textContent;
-                copyButton.textContent = 'Copied!';
-                copyButton.classList.add('bg-green-500');
-                
-                setTimeout(() => {
-                    copyButton.textContent = originalText;
-                    copyButton.classList.remove('bg-green-500');
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-                copyButton.textContent = 'Failed to copy';
-                copyButton.classList.add('bg-red-500');
-                
-                setTimeout(() => {
-                    copyButton.textContent = 'Copy Link';
-                    copyButton.classList.remove('bg-red-500');
-                }, 2000);
-            }
+        linkElement.querySelector('.copy-btn').addEventListener('click', () => {
+            const shareUrlInput = linkElement.querySelector('#shareUrlInput');
+            const shareUrl = shareUrlInput.value;
+
+            // Try using the Clipboard API
+            navigator.clipboard.writeText(shareUrl)
+                .then(() => {
+                    alert('Link copied to clipboard!');
+                })
+                .catch(err => {
+                    console.error('Clipboard API failed, falling back to execCommand: ', err);
+                    // Fallback to execCommand
+                    shareUrlInput.select();
+                    document.execCommand('copy');
+                    alert('Link copied to clipboard (fallback)!');
+                });
         });
     }
 }
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
-    initTheme();
-    
-    // Initialize theme toggle
-    const themeToggle = document.getElementById('theme-toggle');
-    if (themeToggle) {
-        themeToggle.addEventListener('click', toggleTheme);
-    }
-    
     // Initialize file upload manager if on upload page
     const uploadForm = document.getElementById('uploadForm');
     if (uploadForm) {
